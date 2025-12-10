@@ -1,0 +1,47 @@
+# ===========================================
+# CONFIGURACIÓN DE CLOUDFLARE WORKER
+# ===========================================
+# Este archivo configura tu backend para Cloudflare Workers
+# Instrucciones de uso al final del archivo
+
+name = "runna-io-api"
+main = "worker/src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Entorno de desarrollo
+[env.development]
+vars = { ENVIRONMENT = "development" }
+
+# Entorno de producción  
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+# ===========================================
+# INSTRUCCIONES DE CONFIGURACIÓN
+# ===========================================
+#
+# 1. CREAR CUENTA EN CLOUDFLARE (gratis):
+#    - Ve a https://dash.cloudflare.com/sign-up
+#    - Crea una cuenta gratuita
+#
+# 2. INSTALAR WRANGLER (herramienta de Cloudflare):
+#    npm install -g wrangler
+#
+# 3. INICIAR SESIÓN:
+#    wrangler login
+#    (Se abrirá el navegador para autorizar)
+#
+# 4. CONFIGURAR LA BASE DE DATOS:
+#    - Tu DATABASE_URL de Neon debe configurarse como "secret"
+#    - Ejecuta: wrangler secret put DATABASE_URL
+#    - Pega tu URL de Neon cuando te lo pida
+#
+# 5. DESPLEGAR:
+#    wrangler deploy
+#    (Tu API estará en: https://runna-io-api.tu-usuario.workers.dev)
+#
+# 6. PARA DESARROLLO LOCAL:
+#    wrangler dev
+#    (API disponible en http://localhost:8787)
+#
+# ===========================================
