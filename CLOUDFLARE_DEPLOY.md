@@ -7,8 +7,37 @@ Esta guía te explica paso a paso cómo publicar tu app Runna.io en Cloudflare (
 ## 📋 Requisitos Previos
 
 1. **Cuenta de Cloudflare** (gratis): https://dash.cloudflare.com/sign-up
-2. **Base de datos Neon** (ya la tienes configurada)
-3. **Node.js** instalado en tu computadora
+2. **Cuenta de Neon** (gratis): https://neon.tech - Para la base de datos
+3. **Node.js** instalado en tu computadora: https://nodejs.org
+
+---
+
+## 📦 Si Descargaste el ZIP
+
+Si descargaste el proyecto como ZIP desde Replit:
+
+```bash
+# 1. Descomprime el archivo
+unzip runna-io.zip
+cd runna-io
+
+# 2. Instala las dependencias
+npm install
+
+# 3. Continúa con el Paso 1 de esta guía
+```
+
+---
+
+## 🗄️ Configurar Base de Datos Neon (si no la tienes)
+
+1. Ve a https://neon.tech y crea una cuenta gratis
+2. Crea un nuevo proyecto
+3. Copia el "Connection string" que te dan (se ve así):
+   ```
+   postgresql://usuario:contraseña@ep-xxx.region.neon.tech/neondb
+   ```
+4. Guárdalo, lo necesitarás en el Paso 3
 
 ---
 
