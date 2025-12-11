@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertRouteSchema, insertFriendshipSchema } from "@shared/schema";
 import * as turf from "@turf/turf";
 import { seedDatabase } from "./seed";
+import bcrypt from "bcryptjs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -19,14 +20,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get current user (returns first user for demo purposes)
-  app.get("/api/current-user", async (req, res) => {
+  // Get user by ID (for session management - client sends userId)
+  app.get("/api/current-user/:userId", async (req, res) => {
     try {
-      const users = await storage.getAllUsersWithStats();
-      if (users.length === 0) {
-        return res.status(404).json({ error: "No users found. Please seed the database first." });
+      const { userId } = req.params;
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
       }
-      res.json(users[0]);
+      const allUsers = await storage.getAllUsersWithStats();
+      const userWithStats = allUsers.find(u => u.id === userId);
+      res.json(userWithStats || user);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Login endpoint
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username y password son requeridos" });
+      }
+      
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ error: "Usuario no encontrado" });
+      }
+
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Contraseña incorrecta" });
+      }
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -34,12 +64,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ==================== USERS ====================
   
-  // Create user
+  // Create user (register)
   app.post("/api/users", async (req, res) => {
     try {
-      const validatedData = insertUserSchema.parse(req.body);
+      const { password, ...userData } = req.body;
+      
+      if (!password || password.length < 4) {
+        return res.status(400).json({ error: "La contraseña debe tener al menos 4 caracteres" });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      const validatedData = insertUserSchema.parse({
+        ...userData,
+        password: hashedPassword,
+      });
+      
       const user = await storage.createUser(validatedData);
-      res.json(user);
+      
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

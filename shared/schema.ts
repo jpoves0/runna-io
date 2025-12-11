@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   name: text("name").notNull(),
+  password: text("password").notNull().default(''), // Hashed password (empty for legacy users)
   color: text("color").notNull(), // Hex color for territory visualization
   avatar: text("avatar"), // Avatar URL or placeholder
   totalArea: real("total_area").notNull().default(0), // Total m² conquered

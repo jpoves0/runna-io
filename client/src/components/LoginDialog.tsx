@@ -11,67 +11,72 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMutation } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
+import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
-import { LogIn, UserPlus, Sparkles } from 'lucide-react';
+import { LogIn, UserPlus, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { getRandomUserColor } from '@/lib/colors';
 
 interface LoginDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onLogin: (userId: string) => void;
 }
 
-export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
+export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
   const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
   const [registerUsername, setRegisterUsername] = useState('');
   const [registerName, setRegisterName] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const { toast } = useToast();
 
   const loginMutation = useMutation({
-    mutationFn: async (username: string) => {
-      // In a real app, this would validate credentials
-      const users = await fetch('/api/leaderboard').then(r => r.json());
-      const user = users.find((u: any) => u.username === username);
-      if (!user) throw new Error('Usuario no encontrado');
-      return user;
+    mutationFn: async (data: { username: string; password: string }) => {
+      const response = await apiRequest('POST', '/api/auth/login', data);
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/current-user'] });
+    onSuccess: (user) => {
+      onLogin(user.id);
       toast({
-        title: '✅ Sesión iniciada',
-        description: '¡Bienvenido de nuevo!',
-        className: 'animate-bounce-in',
+        title: 'Sesion iniciada',
+        description: 'Bienvenido de nuevo!',
       });
       onOpenChange(false);
+      setLoginUsername('');
+      setLoginPassword('');
     },
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'No se pudo iniciar sesión',
+        description: error.message || 'No se pudo iniciar sesion',
         variant: 'destructive',
       });
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (data: { username: string; name: string }) => {
+    mutationFn: async (data: { username: string; name: string; password: string }) => {
       const response = await apiRequest('POST', '/api/users', {
         username: data.username,
         name: data.name,
+        password: data.password,
         color: getRandomUserColor(),
         avatar: '',
       });
-      return response;
+      return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/current-user'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/leaderboard'] });
+    onSuccess: (user) => {
+      onLogin(user.id);
       toast({
-        title: '🎉 Cuenta creada',
-        description: '¡Bienvenido a Runna.io!',
-        className: 'animate-bounce-in',
+        title: 'Cuenta creada',
+        description: 'Bienvenido a Runna.io!',
       });
       onOpenChange(false);
+      setRegisterUsername('');
+      setRegisterName('');
+      setRegisterPassword('');
     },
     onError: (error: Error) => {
       toast({
@@ -91,7 +96,15 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       });
       return;
     }
-    loginMutation.mutate(loginUsername);
+    if (!loginPassword) {
+      toast({
+        title: 'Error',
+        description: 'Ingresa tu contraseña',
+        variant: 'destructive',
+      });
+      return;
+    }
+    loginMutation.mutate({ username: loginUsername, password: loginPassword });
   };
 
   const handleRegister = () => {
@@ -103,32 +116,43 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
       });
       return;
     }
-    registerMutation.mutate({ username: registerUsername, name: registerName });
+    if (!registerPassword || registerPassword.length < 4) {
+      toast({
+        title: 'Error',
+        description: 'La contraseña debe tener al menos 4 caracteres',
+        variant: 'destructive',
+      });
+      return;
+    }
+    registerMutation.mutate({ 
+      username: registerUsername, 
+      name: registerName,
+      password: registerPassword,
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md animate-scale-in">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-2xl">
             <div className="relative">
               <Sparkles className="h-6 w-6 text-primary" />
-              <div className="absolute inset-0 bg-primary/20 blur-md animate-pulse" />
             </div>
             Runna.io
           </DialogTitle>
           <DialogDescription>
-            Inicia sesión o crea una cuenta para empezar a conquistar
+            Inicia sesion o crea una cuenta para empezar a conquistar
           </DialogDescription>
         </DialogHeader>
         
         <Tabs defaultValue="login" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Iniciar sesión</TabsTrigger>
+            <TabsTrigger value="login">Iniciar sesion</TabsTrigger>
             <TabsTrigger value="register">Registrarse</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="login" className="space-y-4 animate-fade-in">
+          <TabsContent value="login" className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="login-username">Nombre de usuario</Label>
               <Input
@@ -136,32 +160,54 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 placeholder="@tunombre"
                 value={loginUsername}
                 onChange={(e) => setLoginUsername(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                className="transition-all duration-300 focus:scale-[1.02]"
                 data-testid="input-login-username"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Contraseña</Label>
+              <div className="relative">
+                <Input
+                  id="login-password"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  placeholder="Tu contraseña"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                  data-testid="input-login-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  data-testid="button-toggle-login-password"
+                >
+                  {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
             <Button
               onClick={handleLogin}
               disabled={loginMutation.isPending}
-              className="w-full gradient-primary border-0 hover:scale-105 active:scale-95 transition-all duration-300"
+              className="w-full"
               data-testid="button-login"
             >
               <LogIn className="h-5 w-5 mr-2" />
-              {loginMutation.isPending ? 'Iniciando...' : 'Iniciar sesión'}
+              {loginMutation.isPending ? 'Iniciando...' : 'Iniciar sesion'}
             </Button>
           </TabsContent>
           
-          <TabsContent value="register" className="space-y-4 animate-fade-in">
+          <TabsContent value="register" className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="register-name">Nombre completo</Label>
               <Input
                 id="register-name"
-                placeholder="Juan Pérez"
+                placeholder="Juan Perez"
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
-                className="transition-all duration-300 focus:scale-[1.02]"
                 data-testid="input-register-name"
               />
             </div>
@@ -173,16 +219,39 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
                 placeholder="@tunombre"
                 value={registerUsername}
                 onChange={(e) => setRegisterUsername(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                className="transition-all duration-300 focus:scale-[1.02]"
                 data-testid="input-register-username"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="register-password">Contraseña</Label>
+              <div className="relative">
+                <Input
+                  id="register-password"
+                  type={showRegisterPassword ? 'text' : 'password'}
+                  placeholder="Minimo 4 caracteres"
+                  value={registerPassword}
+                  onChange={(e) => setRegisterPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                  data-testid="input-register-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0"
+                  onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                  data-testid="button-toggle-register-password"
+                >
+                  {showRegisterPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
             <Button
               onClick={handleRegister}
               disabled={registerMutation.isPending}
-              className="w-full gradient-primary border-0 hover:scale-105 active:scale-95 transition-all duration-300"
+              className="w-full"
               data-testid="button-register"
             >
               <UserPlus className="h-5 w-5 mr-2" />

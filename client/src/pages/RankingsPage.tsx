@@ -1,12 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { LeaderboardSkeleton } from '@/components/LoadingState';
+import { useSession } from '@/hooks/use-session';
 import type { UserWithStats } from '@shared/schema';
 
 export default function RankingsPage() {
-  const { data: currentUser } = useQuery<UserWithStats>({
-    queryKey: ['/api/current-user'],
-  });
+  const { user: currentUser } = useSession();
 
   const { data: users = [], isLoading } = useQuery<UserWithStats[]>({
     queryKey: ['/api/leaderboard'],
