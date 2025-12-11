@@ -1,0 +1,112 @@
+C:\Users\jpove\Downloads\runnaio (2)\runnaio>wrangler deploy -c wrangler.worker.toml
+
+ ⛅️ wrangler 4.53.0 (update available 4.54.0)
+─────────────────────────────────────────────
+
+X [ERROR] Build failed with 10 errors:
+
+  X [ERROR] Could not resolve "drizzle-orm"
+
+      shared/schema.ts:1:31:
+        1 │ import { sql, relations } from "drizzle-orm";
+          ╵                                ~~~~~~~~~~~~~
+
+    You can mark the path "drizzle-orm" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "drizzle-orm/pg-core"
+
+      shared/schema.ts:2:72:
+        2 │ ...char, timestamp, real, jsonb, integer } from "drizzle-orm/pg-core";
+          ╵                                                 ~~~~~~~~~~~~~~~~~~~~~
+
+    You can mark the path "drizzle-orm/pg-core" as external to exclude it from the bundle, which
+  will remove this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "drizzle-zod"
+
+      shared/schema.ts:3:35:
+        3 │ import { createInsertSchema } from "drizzle-zod";
+          ╵                                    ~~~~~~~~~~~~~
+
+    You can mark the path "drizzle-zod" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "@neondatabase/serverless"
+
+      worker/src/db.ts:1:21:
+        1 │ import { neon } from '@neondatabase/serverless';
+          ╵                      ~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    You can mark the path "@neondatabase/serverless" as external to exclude it from the bundle,
+  which will remove this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "drizzle-orm/neon-http"
+
+      worker/src/db.ts:2:24:
+        2 │ import { drizzle } from 'drizzle-orm/neon-http';
+          ╵                         ~~~~~~~~~~~~~~~~~~~~~~~
+
+    You can mark the path "drizzle-orm/neon-http" as external to exclude it from the bundle, which
+  will remove this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "hono"
+
+      worker/src/index.ts:1:21:
+        1 │ import { Hono } from 'hono';
+          ╵                      ~~~~~~
+
+    You can mark the path "hono" as external to exclude it from the bundle, which will remove this
+  error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "hono/cors"
+
+      worker/src/index.ts:2:21:
+        2 │ import { cors } from 'hono/cors';
+          ╵                      ~~~~~~~~~~~
+
+    You can mark the path "hono/cors" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "hono/logger"
+
+      worker/src/index.ts:3:23:
+        3 │ import { logger } from 'hono/logger';
+          ╵                        ~~~~~~~~~~~~~
+
+    You can mark the path "hono/logger" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "@turf/turf"
+
+      worker/src/routes.ts:5:22:
+        5 │ import * as turf from '@turf/turf';
+          ╵                       ~~~~~~~~~~~~
+
+    You can mark the path "@turf/turf" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+  X [ERROR] Could not resolve "drizzle-orm"
+
+      worker/src/storage.ts:18:30:
+        18 │ import { eq, desc, sql } from 'drizzle-orm';
+           ╵                               ~~~~~~~~~~~~~
+
+    You can mark the path "drizzle-orm" as external to exclude it from the bundle, which will remove
+  this error and leave the unresolved path in the bundle.
+
+
+
+
+🪵  Logs were written to "C:\Users\jpove\AppData\Roaming\xdg.config\.wrangler\logs\wrangler-2025-12-11_17-01-50_291.log"
+
+C:\Users\jpove\Downloads\runnaio (2)\runnaio>
