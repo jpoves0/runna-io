@@ -11,9 +11,23 @@ const app = new Hono<{ Bindings: Env }>();
 
 app.use('*', logger());
 app.use('*', cors({
-  origin: '*',
+  origin: (origin) => {
+    // Allow requests from any Cloudflare Pages subdomain or localhost
+    const allowedOrigins = [
+      'https://runna-io.pages.dev',
+      'http://localhost:5000',
+      'http://localhost:3000',
+    ];
+    // Also allow any *.runna-io.pages.dev subdomain (preview deployments)
+    if (origin && (allowedOrigins.includes(origin) || origin.endsWith('.runna-io.pages.dev'))) {
+      return origin;
+    }
+    // For other origins, return the first allowed origin
+    return allowedOrigins[0];
+  },
   allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
 }));
 
 registerRoutes(app);
