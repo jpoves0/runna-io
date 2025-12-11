@@ -10,7 +10,7 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "pages:build": "vite build --outDir dist/public",
-    "pages:deploy": "npm run pages:build && wrangler pages deploy dist/public",
+    "pages:deploy": "wrangler pages deploy ./dist/public --commit-dirty=true",
     "worker:dev": "wrangler dev -c wrangler.worker.toml",
     "worker:deploy": "wrangler deploy -c wrangler.worker.toml"
   },
