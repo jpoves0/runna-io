@@ -63,7 +63,7 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
         name: data.name,
         password: data.password,
         color: getRandomUserColor(),
-        avatar: '',
+        avatar: null,
       });
       return response.json();
     },
