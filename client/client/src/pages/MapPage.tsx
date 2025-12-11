@@ -1,22 +1,22 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Plus, Zap } from 'lucide-react';
+import { Plus, Zap, User } from 'lucide-react';
 import { MapView } from '@/components/MapView';
 import { StatsOverlay } from '@/components/StatsOverlay';
 import { RouteTracker } from '@/components/RouteTracker';
+import { LoginDialog } from '@/components/LoginDialog';
 import { MapSkeleton } from '@/components/LoadingState';
 import { useToast } from '@/hooks/use-toast';
+import { useSession } from '@/hooks/use-session';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import type { TerritoryWithUser, UserWithStats } from '@shared/schema';
+import type { TerritoryWithUser } from '@shared/schema';
 
 export default function MapPage() {
   const [isTracking, setIsTracking] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
   const { toast } = useToast();
-
-  const { data: currentUser, isLoading: userLoading } = useQuery<UserWithStats>({
-    queryKey: ['/api/current-user'],
-  });
+  const { user: currentUser, isLoading: userLoading, login } = useSession();
 
   const { data: territories = [], isLoading: territoriesLoading } = useQuery<TerritoryWithUser[]>({
     queryKey: ['/api/territories'],

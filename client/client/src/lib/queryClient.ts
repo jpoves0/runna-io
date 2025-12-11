@@ -1,9 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// En producción, usar el Worker de Cloudflare; en desarrollo, usar el servidor local
-const API_BASE = import.meta.env.PROD 
-  ? 'https://runna-io-api.runna-io-api.workers.dev'
-  : '';
+// URL de la API - usar variable de entorno VITE_API_BASE_URL para Cloudflare Pages
+// En desarrollo local (Replit), usar '' para llamadas relativas al mismo servidor
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.PROD ? 'https://runna-io-api.runna-io-api.workers.dev' : '');
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -22,6 +22,7 @@ export async function apiRequest(
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
   });
 
   await throwIfResNotOk(res);
@@ -37,6 +38,7 @@ export const getQueryFn: <T>(options: {
     const url = queryKey.join("/") as string;
     const fullUrl = url.startsWith('/') ? `${API_BASE}${url}` : url;
     const res = await fetch(fullUrl, {
+      credentials: "include",
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

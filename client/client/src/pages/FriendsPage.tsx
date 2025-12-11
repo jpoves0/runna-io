@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FriendsList } from '@/components/FriendsList';
 import { LoadingState } from '@/components/LoadingState';
+import { LoginDialog } from '@/components/LoginDialog';
 import {
   Dialog,
   DialogContent,
@@ -11,15 +12,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { User } from 'lucide-react';
+import { useSession } from '@/hooks/use-session';
 import type { UserWithStats } from '@shared/schema';
 
 export default function FriendsPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  const { data: currentUser } = useQuery<UserWithStats>({
-    queryKey: ['/api/current-user'],
-  });
+  const { user: currentUser, isLoading: userLoading, login } = useSession();
 
   const { data: friends = [], isLoading } = useQuery<UserWithStats[]>({
     queryKey: ['/api/friends', currentUser?.id],
@@ -31,14 +32,34 @@ export default function FriendsPage() {
   };
 
   const handleViewTerritory = (userId: string) => {
-    // Navigate to map and highlight user's territory
     console.log('View territory for user:', userId);
   };
 
   const handleSearch = () => {
-    // Search for users - will be implemented in backend phase
     console.log('Searching for:', searchQuery);
   };
+
+  if (userLoading) {
+    return <LoadingState message="Cargando..." />;
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6">
+        <div className="text-center space-y-4">
+          <User className="h-20 w-20 mx-auto text-muted-foreground" />
+          <h2 className="text-2xl font-bold">Inicia sesion</h2>
+          <p className="text-muted-foreground">
+            Inicia sesion para ver tus amigos
+          </p>
+          <Button onClick={() => setIsLoginOpen(true)} data-testid="button-login-friends">
+            Iniciar sesion
+          </Button>
+        </div>
+        <LoginDialog open={isLoginOpen} onOpenChange={setIsLoginOpen} onLogin={login} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return <LoadingState message="Cargando amigos..." />;

@@ -5,6 +5,20 @@ import { insertUserSchema, insertRouteSchema, insertFriendshipSchema, type Inser
 import * as turf from '@turf/turf';
 import type { Env } from './index';
 
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'runna_salt_2024');
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  const computedHash = await hashPassword(password);
+  return computedHash === hash;
+}
+
 export function registerRoutes(app: Hono<{ Bindings: Env }>) {
   
   app.post('/api/seed', async (c) => {
@@ -17,9 +31,11 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>) {
         return c.json({ message: "Database already has users", defaultUser: existingUsers[0] });
       }
 
+      const hashedPassword = await hashPassword('demo123');
       const user = await storage.createUser({
         username: "demo_runner",
         name: "Demo Runner",
+        password: hashedPassword,
         color: "#3B82F6",
         avatar: null,
       });
@@ -30,15 +46,47 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>) {
     }
   });
 
-  app.get('/api/current-user', async (c) => {
+  app.get('/api/current-user/:userId', async (c) => {
     try {
       const db = createDb(c.env.DATABASE_URL);
       const storage = new WorkerStorage(db);
-      const users = await storage.getAllUsersWithStats();
-      if (users.length === 0) {
-        return c.json({ error: "No users found. Please seed the database first." }, 404);
+      const userId = c.req.param('userId');
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return c.json({ error: "User not found" }, 404);
       }
-      return c.json(users[0]);
+      const allUsers = await storage.getAllUsersWithStats();
+      const userWithStats = allUsers.find(u => u.id === userId);
+      const { password: _, ...userWithoutPassword } = userWithStats || user;
+      return c.json(userWithoutPassword);
+    } catch (error: any) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  app.post('/api/auth/login', async (c) => {
+    try {
+      const db = createDb(c.env.DATABASE_URL);
+      const storage = new WorkerStorage(db);
+      const body = await c.req.json();
+      const { username, password } = body;
+      
+      if (!username || !password) {
+        return c.json({ error: "Username y password son requeridos" }, 400);
+      }
+      
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return c.json({ error: "Usuario no encontrado" }, 401);
+      }
+
+      const isValid = await verifyPassword(password, user.password);
+      if (!isValid) {
+        return c.json({ error: "Contraseña incorrecta" }, 401);
+      }
+
+      const { password: _, ...userWithoutPassword } = user;
+      return c.json(userWithoutPassword);
     } catch (error: any) {
       return c.json({ error: error.message }, 500);
     }
@@ -49,9 +97,21 @@ export function registerRoutes(app: Hono<{ Bindings: Env }>) {
       const db = createDb(c.env.DATABASE_URL);
       const storage = new WorkerStorage(db);
       const body = await c.req.json();
-      const validatedData = insertUserSchema.parse(body);
+      const { password, ...userData } = body;
+      
+      if (!password || password.length < 4) {
+        return c.json({ error: "La contraseña debe tener al menos 4 caracteres" }, 400);
+      }
+
+      const hashedPassword = await hashPassword(password);
+      const validatedData = insertUserSchema.parse({
+        ...userData,
+        password: hashedPassword,
+      });
       const user = await storage.createUser(validatedData);
-      return c.json(user);
+      
+      const { password: _, ...userWithoutPassword } = user;
+      return c.json(userWithoutPassword);
     } catch (error: any) {
       return c.json({ error: error.message }, 400);
     }

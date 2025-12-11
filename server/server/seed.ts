@@ -1,39 +1,48 @@
 import { storage } from "./storage";
 import { getUserColorByIndex } from "@shared/colors";
+import bcrypt from "bcryptjs";
 
 export async function seedDatabase() {
-  console.log('🌱 Seeding database...');
+  console.log('Seeding database...');
 
   try {
+    // Hash default password for demo users
+    const defaultPassword = await bcrypt.hash('demo123', 10);
+
     // Create demo users
     const users = [
       {
         username: 'runner_pro',
-        name: 'Carlos Martínez',
+        name: 'Carlos Martinez',
+        password: defaultPassword,
         color: getUserColorByIndex(0),
         avatar: '',
       },
       {
         username: 'maria_runner',
-        name: 'María González',
+        name: 'Maria Gonzalez',
+        password: defaultPassword,
         color: getUserColorByIndex(1),
         avatar: '',
       },
       {
         username: 'juancho_run',
-        name: 'Juan Pérez',
+        name: 'Juan Perez',
+        password: defaultPassword,
         color: getUserColorByIndex(2),
         avatar: '',
       },
       {
         username: 'ana_fitness',
-        name: 'Ana López',
+        name: 'Ana Lopez',
+        password: defaultPassword,
         color: getUserColorByIndex(3),
         avatar: '',
       },
       {
         username: 'pedro_trail',
-        name: 'Pedro Sánchez',
+        name: 'Pedro Sanchez',
+        password: defaultPassword,
         color: getUserColorByIndex(4),
         avatar: '',
       },
@@ -67,9 +76,10 @@ export async function seedDatabase() {
       }
     }
 
-    console.log('✅ Database seeded successfully!');
-    console.log(`\nDefault user for testing: ${createdUsers[0].name} (@${createdUsers[0].username})`);
+    console.log('Database seeded successfully!');
+    console.log(`Default user for testing: ${createdUsers[0].name} (@${createdUsers[0].username})`);
     console.log(`User ID: ${createdUsers[0].id}`);
+    console.log(`Default password for all demo users: demo123`);
     
     return createdUsers[0];
   } catch (error) {
