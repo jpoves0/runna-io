@@ -1,0 +1,19 @@
+# ===========================================
+# CONFIGURACIÓN DE CLOUDFLARE WORKER (Backend API)
+# ===========================================
+# Este archivo configura tu backend API para Cloudflare Workers
+# Usa: wrangler deploy -c wrangler.worker.toml
+
+name = "runna-io-api"
+main = "worker/src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Variables de entorno
+[vars]
+ENVIRONMENT = "production"
+
+# Para desplegar el Worker, usa:
+# wrangler deploy -c wrangler.worker.toml
+#
+# Para configurar DATABASE_URL:
+# wrangler secret put DATABASE_URL -c wrangler.worker.toml

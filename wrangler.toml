@@ -1,20 +1,16 @@
 # ===========================================
-# CONFIGURACIÓN DE CLOUDFLARE WORKER (Backend API)
+# CONFIGURACIÓN DE CLOUDFLARE PAGES (Frontend)
 # ===========================================
-# Este archivo configura tu backend para Cloudflare Workers
-# Para el frontend, usa Cloudflare Pages con dist/public como output
+# Este archivo configura el despliegue del frontend en Cloudflare Pages
 
-name = "runna-io-api"
-main = "worker/src/index.ts"
+name = "runna-io"
+pages_build_output_dir = "dist/public"
 compatibility_date = "2024-01-01"
 
-# Configuración para Cloudflare Pages (si usas wrangler pages deploy)
-pages_build_output_dir = "dist/public"
+# Entorno de preview (para ramas que no son main)
+[env.preview]
+vars = { ENVIRONMENT = "preview" }
 
-# Entorno de desarrollo
-[env.development]
-vars = { ENVIRONMENT = "development" }
-
-# Entorno de producción  
+# Entorno de producción (rama main)
 [env.production]
 vars = { ENVIRONMENT = "production" }
