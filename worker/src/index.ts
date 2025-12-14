@@ -5,6 +5,10 @@ import { registerRoutes } from './routes';
 
 export interface Env {
   DATABASE_URL: string;
+  STRAVA_CLIENT_ID: string;
+  STRAVA_CLIENT_SECRET: string;
+  STRAVA_WEBHOOK_VERIFY_TOKEN: string;
+  STRAVA_REDIRECT_URI?: string;
 }
 
 const app = new Hono<{ Bindings: Env }>();

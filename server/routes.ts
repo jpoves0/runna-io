@@ -303,6 +303,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const STRAVA_WEBHOOK_VERIFY_TOKEN = process.env.STRAVA_WEBHOOK_VERIFY_TOKEN;
   const STRAVA_REDIRECT_URI = process.env.STRAVA_REDIRECT_URI || 'https://runna-io.pages.dev/api/strava/callback';
 
+  // Helper to refresh Strava access token if expired
+  async function getValidStravaToken(stravaAccount: {
+    userId: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: Date;
+  }): Promise<string | null> {
+    const now = new Date();
+    const expiresAt = new Date(stravaAccount.expiresAt);
+    
+    // Add 5 minute buffer before expiration
+    const bufferMs = 5 * 60 * 1000;
+    if (expiresAt.getTime() - bufferMs > now.getTime()) {
+      return stravaAccount.accessToken;
+    }
+
+    // Token expired or expiring soon, refresh it
+    try {
+      const response = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: STRAVA_CLIENT_ID,
+          client_secret: STRAVA_CLIENT_SECRET,
+          grant_type: 'refresh_token',
+          refresh_token: stravaAccount.refreshToken,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to refresh Strava token:', await response.text());
+        return null;
+      }
+
+      const data: any = await response.json();
+      const { access_token, refresh_token, expires_at } = data;
+
+      // Update stored tokens
+      await storage.updateStravaAccount(stravaAccount.userId, {
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: new Date(expires_at * 1000),
+      });
+
+      return access_token;
+    } catch (error) {
+      console.error('Error refreshing Strava token:', error);
+      return null;
+    }
+  }
+
   // Get Strava connection status for user
   app.get("/api/strava/status/:userId", async (req, res) => {
     try {
@@ -475,11 +526,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const existingActivity = await storage.getStravaActivityByStravaId(object_id);
           
           if (!existingActivity) {
+            // Get valid (possibly refreshed) access token
+            const validToken = await getValidStravaToken(stravaAccount);
+            if (!validToken) {
+              console.error('Failed to get valid Strava token for athlete:', owner_id);
+              return res.status(200).json({ received: true });
+            }
+
             // Fetch activity details from Strava
             const activityResponse = await fetch(
               `https://www.strava.com/api/v3/activities/${object_id}?include_all_efforts=false`,
               {
-                headers: { 'Authorization': `Bearer ${stravaAccount.accessToken}` },
+                headers: { 'Authorization': `Bearer ${validToken}` },
               }
             );
             
@@ -504,6 +562,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   processedAt: null,
                 });
               }
+            } else {
+              console.error('Failed to fetch Strava activity:', object_id, await activityResponse.text());
             }
           }
         }

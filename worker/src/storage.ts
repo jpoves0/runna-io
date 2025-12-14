@@ -3,6 +3,8 @@ import {
   routes,
   territories,
   friendships,
+  stravaAccounts,
+  stravaActivities,
   type User,
   type InsertUser,
   type Route,
@@ -11,6 +13,10 @@ import {
   type InsertTerritory,
   type Friendship,
   type InsertFriendship,
+  type StravaAccount,
+  type InsertStravaAccount,
+  type StravaActivity,
+  type InsertStravaActivity,
   type UserWithStats,
   type TerritoryWithUser,
   type RouteWithTerritory,
@@ -215,5 +221,61 @@ export class WorkerStorage {
         sql`${friendships.userId} = ${userId} AND ${friendships.friendId} = ${friendId}`
       );
     return !!friendship;
+  }
+
+  // ==================== STRAVA ====================
+
+  async getStravaAccountByUserId(userId: string): Promise<StravaAccount | undefined> {
+    const [account] = await this.db.select().from(stravaAccounts).where(eq(stravaAccounts.userId, userId));
+    return account || undefined;
+  }
+
+  async getStravaAccountByAthleteId(athleteId: number): Promise<StravaAccount | undefined> {
+    const [account] = await this.db.select().from(stravaAccounts).where(eq(stravaAccounts.stravaAthleteId, athleteId));
+    return account || undefined;
+  }
+
+  async createStravaAccount(data: InsertStravaAccount): Promise<StravaAccount> {
+    const [account] = await this.db.insert(stravaAccounts).values(data).returning();
+    return account;
+  }
+
+  async updateStravaAccount(userId: string, data: Partial<InsertStravaAccount>): Promise<StravaAccount> {
+    const [account] = await this.db
+      .update(stravaAccounts)
+      .set(data)
+      .where(eq(stravaAccounts.userId, userId))
+      .returning();
+    return account;
+  }
+
+  async deleteStravaAccount(userId: string): Promise<void> {
+    await this.db.delete(stravaAccounts).where(eq(stravaAccounts.userId, userId));
+  }
+
+  async getStravaActivityByStravaId(stravaActivityId: number): Promise<StravaActivity | undefined> {
+    const [activity] = await this.db.select().from(stravaActivities).where(eq(stravaActivities.stravaActivityId, stravaActivityId));
+    return activity || undefined;
+  }
+
+  async createStravaActivity(data: InsertStravaActivity): Promise<StravaActivity> {
+    const [activity] = await this.db.insert(stravaActivities).values(data).returning();
+    return activity;
+  }
+
+  async updateStravaActivity(id: string, data: Partial<InsertStravaActivity>): Promise<StravaActivity> {
+    const [activity] = await this.db
+      .update(stravaActivities)
+      .set(data)
+      .where(eq(stravaActivities.id, id))
+      .returning();
+    return activity;
+  }
+
+  async getUnprocessedStravaActivities(userId: string): Promise<StravaActivity[]> {
+    return await this.db
+      .select()
+      .from(stravaActivities)
+      .where(sql`${stravaActivities.userId} = ${userId} AND ${stravaActivities.processed} = false`);
   }
 }

@@ -76,6 +76,40 @@ postgresql://usuario:contraseña@host.neon.tech/basededatos
 
 ---
 
+## 🏃 Paso 3.5: Configurar Strava (Opcional)
+
+Si quieres integrar Strava para importar actividades automaticamente:
+
+### A. Configura los secrets de Strava:
+```bash
+wrangler secret put STRAVA_CLIENT_ID
+# Ingresa tu Client ID de Strava (ejemplo: 190184)
+
+wrangler secret put STRAVA_CLIENT_SECRET
+# Ingresa tu Client Secret de Strava
+
+wrangler secret put STRAVA_WEBHOOK_VERIFY_TOKEN
+# Crea cualquier string aleatorio (ejemplo: mi_token_secreto_2024)
+
+wrangler secret put STRAVA_REDIRECT_URI
+# Ingresa: https://runna-io-api.TU-USUARIO.workers.dev/api/strava/callback
+```
+
+### B. Configura tu app en Strava:
+1. Ve a https://www.strava.com/settings/api
+2. En "Authorization Callback Domain" pon: `runna-io-api.TU-USUARIO.workers.dev`
+
+### C. Registra el webhook (despues de desplegar el Worker):
+```bash
+curl -X POST https://www.strava.com/api/v3/push_subscriptions \
+  -d client_id=TU_CLIENT_ID \
+  -d client_secret=TU_CLIENT_SECRET \
+  -d callback_url=https://runna-io-api.TU-USUARIO.workers.dev/api/strava/webhook \
+  -d verify_token=TU_WEBHOOK_VERIFY_TOKEN
+```
+
+---
+
 ## 🚀 Paso 4: Desplegar el Backend (Worker)
 
 ```bash
