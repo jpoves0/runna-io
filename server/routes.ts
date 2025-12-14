@@ -296,6 +296,337 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== STRAVA INTEGRATION ====================
+  
+  const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
+  const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
+  const STRAVA_WEBHOOK_VERIFY_TOKEN = process.env.STRAVA_WEBHOOK_VERIFY_TOKEN;
+  const STRAVA_REDIRECT_URI = process.env.STRAVA_REDIRECT_URI || 'https://runna-io.pages.dev/api/strava/callback';
+
+  // Get Strava connection status for user
+  app.get("/api/strava/status/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const stravaAccount = await storage.getStravaAccountByUserId(userId);
+      
+      if (stravaAccount) {
+        res.json({
+          connected: true,
+          athleteData: stravaAccount.athleteData,
+          lastSyncAt: stravaAccount.lastSyncAt,
+        });
+      } else {
+        res.json({ connected: false });
+      }
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Initiate Strava OAuth
+  app.get("/api/strava/connect", async (req, res) => {
+    try {
+      const { userId } = req.query;
+      if (!userId || !STRAVA_CLIENT_ID) {
+        return res.status(400).json({ error: "userId required and Strava not configured" });
+      }
+
+      const state = Buffer.from(JSON.stringify({ userId, ts: Date.now() })).toString('base64');
+      const scopes = 'read,activity:read_all';
+      
+      const authUrl = `https://www.strava.com/oauth/authorize?client_id=${STRAVA_CLIENT_ID}&redirect_uri=${encodeURIComponent(STRAVA_REDIRECT_URI)}&response_type=code&scope=${scopes}&state=${state}`;
+      
+      res.json({ authUrl });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Strava OAuth callback
+  app.get("/api/strava/callback", async (req, res) => {
+    try {
+      const { code, state, error: authError } = req.query;
+      
+      if (authError) {
+        return res.redirect('/?strava_error=denied');
+      }
+      
+      if (!code || !state || !STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET) {
+        return res.redirect('/?strava_error=invalid');
+      }
+
+      // Decode state to get userId
+      let userId: string;
+      try {
+        const decoded = JSON.parse(Buffer.from(state as string, 'base64').toString());
+        userId = decoded.userId;
+      } catch {
+        return res.redirect('/?strava_error=invalid_state');
+      }
+
+      // Exchange code for tokens
+      const tokenResponse = await fetch('https://www.strava.com/oauth/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: STRAVA_CLIENT_ID,
+          client_secret: STRAVA_CLIENT_SECRET,
+          code,
+          grant_type: 'authorization_code',
+        }),
+      });
+
+      if (!tokenResponse.ok) {
+        console.error('Strava token exchange failed:', await tokenResponse.text());
+        return res.redirect('/?strava_error=token_exchange');
+      }
+
+      const tokenData = await tokenResponse.json();
+      const { access_token, refresh_token, expires_at, athlete } = tokenData;
+
+      // Check if this Strava account is already linked to another user
+      const existingAccount = await storage.getStravaAccountByAthleteId(athlete.id);
+      if (existingAccount && existingAccount.userId !== userId) {
+        return res.redirect('/?strava_error=already_linked');
+      }
+
+      // Create or update Strava account
+      const expiresAtDate = new Date(expires_at * 1000);
+      const stravaAccountData = {
+        userId,
+        stravaAthleteId: athlete.id,
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        expiresAt: expiresAtDate,
+        scope: 'read,activity:read_all',
+        athleteData: athlete,
+        lastSyncAt: null,
+      };
+
+      if (existingAccount) {
+        await storage.updateStravaAccount(userId, stravaAccountData);
+      } else {
+        await storage.createStravaAccount(stravaAccountData);
+      }
+
+      res.redirect('/?strava_connected=true');
+    } catch (error: any) {
+      console.error('Strava callback error:', error);
+      res.redirect('/?strava_error=server');
+    }
+  });
+
+  // Disconnect Strava
+  app.post("/api/strava/disconnect", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) {
+        return res.status(400).json({ error: "userId required" });
+      }
+
+      const stravaAccount = await storage.getStravaAccountByUserId(userId);
+      if (!stravaAccount) {
+        return res.status(404).json({ error: "Strava account not connected" });
+      }
+
+      // Revoke token at Strava (best effort)
+      try {
+        await fetch('https://www.strava.com/oauth/deauthorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `access_token=${stravaAccount.accessToken}`,
+        });
+      } catch (e) {
+        console.error('Failed to revoke Strava token:', e);
+      }
+
+      await storage.deleteStravaAccount(userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Strava webhook validation (GET)
+  app.get("/api/strava/webhook", (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    if (mode === 'subscribe' && token === STRAVA_WEBHOOK_VERIFY_TOKEN) {
+      res.json({ 'hub.challenge': challenge });
+    } else {
+      res.status(403).json({ error: 'Forbidden' });
+    }
+  });
+
+  // Strava webhook events (POST)
+  app.post("/api/strava/webhook", async (req, res) => {
+    try {
+      const { object_type, aspect_type, object_id, owner_id } = req.body;
+      
+      // Only process new activities
+      if (object_type === 'activity' && aspect_type === 'create') {
+        // Find user by Strava athlete ID
+        const stravaAccount = await storage.getStravaAccountByAthleteId(owner_id);
+        
+        if (stravaAccount) {
+          // Check if activity already exists
+          const existingActivity = await storage.getStravaActivityByStravaId(object_id);
+          
+          if (!existingActivity) {
+            // Fetch activity details from Strava
+            const activityResponse = await fetch(
+              `https://www.strava.com/api/v3/activities/${object_id}?include_all_efforts=false`,
+              {
+                headers: { 'Authorization': `Bearer ${stravaAccount.accessToken}` },
+              }
+            );
+            
+            if (activityResponse.ok) {
+              const activity = await activityResponse.json();
+              
+              // Only process runs and walks
+              if (['Run', 'Walk', 'Hike', 'Trail Run'].includes(activity.type)) {
+                // Store the activity for processing
+                await storage.createStravaActivity({
+                  stravaActivityId: activity.id,
+                  userId: stravaAccount.userId,
+                  routeId: null,
+                  territoryId: null,
+                  name: activity.name,
+                  activityType: activity.type,
+                  distance: activity.distance,
+                  duration: activity.moving_time,
+                  startDate: new Date(activity.start_date),
+                  summaryPolyline: activity.map?.summary_polyline || null,
+                  processed: false,
+                  processedAt: null,
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      // Always respond 200 to acknowledge receipt
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      console.error('Strava webhook error:', error);
+      res.status(200).json({ received: true }); // Still acknowledge to prevent retries
+    }
+  });
+
+  // Process pending Strava activities (manual trigger or cron)
+  app.post("/api/strava/process/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const unprocessed = await storage.getUnprocessedStravaActivities(userId);
+      const results: any[] = [];
+
+      for (const activity of unprocessed) {
+        if (!activity.summaryPolyline) {
+          // Skip activities without GPS data
+          await storage.updateStravaActivity(activity.id, { processed: true, processedAt: new Date() });
+          continue;
+        }
+
+        try {
+          // Decode polyline to coordinates
+          const polyline = await import('@mapbox/polyline');
+          const decoded = polyline.decode(activity.summaryPolyline);
+          const coordinates: Array<[number, number]> = decoded.map((coord: [number, number]) => [coord[0], coord[1]]);
+
+          if (coordinates.length >= 3) {
+            // Create route
+            const route = await storage.createRoute({
+              userId: activity.userId,
+              name: activity.name,
+              coordinates,
+              distance: activity.distance,
+              duration: activity.duration,
+              startedAt: activity.startDate,
+              completedAt: new Date(activity.startDate.getTime() + activity.duration * 1000),
+            });
+
+            // Calculate territory (same logic as POST /api/routes)
+            const lineString = turf.lineString(
+              coordinates.map(coord => [coord[1], coord[0]]) // [lng, lat] for GeoJSON
+            );
+            const buffered = turf.buffer(lineString, 0.05, { units: 'kilometers' });
+
+            if (buffered) {
+              const allTerritories = await storage.getAllTerritories();
+              const userTerritories = allTerritories.filter(t => t.userId === userId);
+              const otherTerritories = allTerritories.filter(t => t.userId !== userId);
+
+              // Handle reconquest
+              for (const otherTerritory of otherTerritories) {
+                try {
+                  const otherPoly = turf.polygon(otherTerritory.geometry.coordinates);
+                  const intersection = turf.intersect(turf.featureCollection([buffered, otherPoly]));
+                  if (intersection) {
+                    await storage.deleteTerritoryById(otherTerritory.id);
+                    const otherUserTerritories = await storage.getTerritoriesByUserId(otherTerritory.userId);
+                    const newTotalArea = otherUserTerritories
+                      .filter(t => t.id !== otherTerritory.id)
+                      .reduce((sum, t) => sum + t.area, 0);
+                    await storage.updateUserTotalArea(otherTerritory.userId, newTotalArea);
+                  }
+                } catch (err) {
+                  console.error('Error checking overlap:', err);
+                }
+              }
+
+              // Merge with existing territories
+              let finalGeometry = buffered.geometry;
+              for (const userTerritory of userTerritories) {
+                try {
+                  const userPoly = turf.polygon(userTerritory.geometry.coordinates);
+                  const union = turf.union(turf.featureCollection([turf.polygon(finalGeometry.coordinates), userPoly]));
+                  if (union) {
+                    finalGeometry = union.geometry;
+                    await storage.deleteTerritoryById(userTerritory.id);
+                  }
+                } catch (err) {
+                  console.error('Error merging territories:', err);
+                }
+              }
+
+              const territory = await storage.createTerritory({
+                userId,
+                routeId: route.id,
+                geometry: finalGeometry,
+                area: turf.area(finalGeometry),
+              });
+
+              // Update user total area
+              const updatedTerritories = await storage.getTerritoriesByUserId(userId);
+              const totalArea = updatedTerritories.reduce((sum, t) => sum + t.area, 0);
+              await storage.updateUserTotalArea(userId, totalArea);
+
+              await storage.updateStravaActivity(activity.id, {
+                processed: true,
+                processedAt: new Date(),
+                routeId: route.id,
+                territoryId: territory.id,
+              });
+
+              results.push({ activityId: activity.stravaActivityId, routeId: route.id, territoryId: territory.id });
+            }
+          }
+        } catch (err) {
+          console.error('Error processing Strava activity:', err);
+          await storage.updateStravaActivity(activity.id, { processed: true, processedAt: new Date() });
+        }
+      }
+
+      res.json({ processed: results.length, results });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
