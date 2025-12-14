@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, real, jsonb, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, real, jsonb, integer, boolean, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -41,11 +41,44 @@ export const friendships = pgTable("friendships", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// Strava Integration Tables
+export const stravaAccounts = pgTable("strava_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  stravaAthleteId: bigint("strava_athlete_id", { mode: "number" }).notNull().unique(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  scope: text("scope").notNull(),
+  athleteData: jsonb("athlete_data").$type<any>(), // Strava athlete profile
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const stravaActivities = pgTable("strava_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  stravaActivityId: bigint("strava_activity_id", { mode: "number" }).notNull().unique(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  routeId: varchar("route_id").references(() => routes.id, { onDelete: 'set null' }),
+  territoryId: varchar("territory_id").references(() => territories.id, { onDelete: 'set null' }),
+  name: text("name").notNull(),
+  activityType: text("activity_type").notNull(), // Run, Walk, etc.
+  distance: real("distance").notNull(), // meters
+  duration: integer("duration").notNull(), // seconds (moving_time)
+  startDate: timestamp("start_date").notNull(),
+  summaryPolyline: text("summary_polyline"), // Encoded polyline from Strava
+  processed: boolean("processed").notNull().default(false),
+  processedAt: timestamp("processed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   routes: many(routes),
   territories: many(territories),
   friendships: many(friendships),
+  stravaAccount: one(stravaAccounts),
+  stravaActivities: many(stravaActivities),
 }));
 
 export const routesRelations = relations(routes, ({ one, many }) => ({
@@ -78,6 +111,28 @@ export const friendshipsRelations = relations(friendships, ({ one }) => ({
   }),
 }));
 
+export const stravaAccountsRelations = relations(stravaAccounts, ({ one }) => ({
+  user: one(users, {
+    fields: [stravaAccounts.userId],
+    references: [users.id],
+  }),
+}));
+
+export const stravaActivitiesRelations = relations(stravaActivities, ({ one }) => ({
+  user: one(users, {
+    fields: [stravaActivities.userId],
+    references: [users.id],
+  }),
+  route: one(routes, {
+    fields: [stravaActivities.routeId],
+    references: [routes.id],
+  }),
+  territory: one(territories, {
+    fields: [stravaActivities.territoryId],
+    references: [territories.id],
+  }),
+}));
+
 // Insert Schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -99,6 +154,16 @@ export const insertFriendshipSchema = createInsertSchema(friendships).omit({
   createdAt: true,
 });
 
+export const insertStravaAccountSchema = createInsertSchema(stravaAccounts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertStravaActivitySchema = createInsertSchema(stravaActivities).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -111,6 +176,12 @@ export type InsertTerritory = z.infer<typeof insertTerritorySchema>;
 
 export type Friendship = typeof friendships.$inferSelect;
 export type InsertFriendship = z.infer<typeof insertFriendshipSchema>;
+
+export type StravaAccount = typeof stravaAccounts.$inferSelect;
+export type InsertStravaAccount = z.infer<typeof insertStravaAccountSchema>;
+
+export type StravaActivity = typeof stravaActivities.$inferSelect;
+export type InsertStravaActivity = z.infer<typeof insertStravaActivitySchema>;
 
 // Extended types for frontend
 export type UserWithStats = User & {

@@ -3,6 +3,8 @@ import {
   routes,
   territories,
   friendships,
+  stravaAccounts,
+  stravaActivities,
   type User,
   type InsertUser,
   type Route,
@@ -11,6 +13,10 @@ import {
   type InsertTerritory,
   type Friendship,
   type InsertFriendship,
+  type StravaAccount,
+  type InsertStravaAccount,
+  type StravaActivity,
+  type InsertStravaActivity,
   type UserWithStats,
   type TerritoryWithUser,
   type RouteWithTerritory,
@@ -42,6 +48,17 @@ export interface IStorage {
   createFriendship(friendship: InsertFriendship): Promise<Friendship>;
   getFriendsByUserId(userId: string): Promise<UserWithStats[]>;
   checkFriendship(userId: string, friendId: string): Promise<boolean>;
+
+  // Strava
+  getStravaAccountByUserId(userId: string): Promise<StravaAccount | undefined>;
+  getStravaAccountByAthleteId(athleteId: number): Promise<StravaAccount | undefined>;
+  createStravaAccount(account: InsertStravaAccount): Promise<StravaAccount>;
+  updateStravaAccount(userId: string, data: Partial<StravaAccount>): Promise<StravaAccount>;
+  deleteStravaAccount(userId: string): Promise<void>;
+  getStravaActivityByStravaId(stravaActivityId: number): Promise<StravaActivity | undefined>;
+  createStravaActivity(activity: InsertStravaActivity): Promise<StravaActivity>;
+  updateStravaActivity(id: string, data: Partial<StravaActivity>): Promise<StravaActivity>;
+  getUnprocessedStravaActivities(userId: string): Promise<StravaActivity[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -241,6 +258,52 @@ export class DatabaseStorage implements IStorage {
         sql`${friendships.userId} = ${userId} AND ${friendships.friendId} = ${friendId}`
       );
     return !!friendship;
+  }
+
+  // Strava
+  async getStravaAccountByUserId(userId: string): Promise<StravaAccount | undefined> {
+    const [account] = await db.select().from(stravaAccounts).where(eq(stravaAccounts.userId, userId));
+    return account || undefined;
+  }
+
+  async getStravaAccountByAthleteId(athleteId: number): Promise<StravaAccount | undefined> {
+    const [account] = await db.select().from(stravaAccounts).where(eq(stravaAccounts.stravaAthleteId, athleteId));
+    return account || undefined;
+  }
+
+  async createStravaAccount(account: InsertStravaAccount): Promise<StravaAccount> {
+    const [created] = await db.insert(stravaAccounts).values(account).returning();
+    return created;
+  }
+
+  async updateStravaAccount(userId: string, data: Partial<StravaAccount>): Promise<StravaAccount> {
+    const [updated] = await db.update(stravaAccounts).set(data).where(eq(stravaAccounts.userId, userId)).returning();
+    return updated;
+  }
+
+  async deleteStravaAccount(userId: string): Promise<void> {
+    await db.delete(stravaAccounts).where(eq(stravaAccounts.userId, userId));
+  }
+
+  async getStravaActivityByStravaId(stravaActivityId: number): Promise<StravaActivity | undefined> {
+    const [activity] = await db.select().from(stravaActivities).where(eq(stravaActivities.stravaActivityId, stravaActivityId));
+    return activity || undefined;
+  }
+
+  async createStravaActivity(activity: InsertStravaActivity): Promise<StravaActivity> {
+    const [created] = await db.insert(stravaActivities).values(activity).returning();
+    return created;
+  }
+
+  async updateStravaActivity(id: string, data: Partial<StravaActivity>): Promise<StravaActivity> {
+    const [updated] = await db.update(stravaActivities).set(data).where(eq(stravaActivities.id, id)).returning();
+    return updated;
+  }
+
+  async getUnprocessedStravaActivities(userId: string): Promise<StravaActivity[]> {
+    return await db.select().from(stravaActivities)
+      .where(sql`${stravaActivities.userId} = ${userId} AND ${stravaActivities.processed} = false`)
+      .orderBy(desc(stravaActivities.startDate));
   }
 }
 
